@@ -1,3 +1,6 @@
+import matplotlib
+matplotlib.use("Agg")
+
 import numpy as np
 import AI_stats_lab as lab
 
@@ -6,192 +9,298 @@ import AI_stats_lab as lab
 # Question 1 Tests
 # ============================================================
 
-def test_generate_nonlinear_data_shape():
-    X, y = lab.generate_nonlinear_data(
-        n_samples=50,
-        noise=0.1,
-        random_state=42
-    )
+def test_load_iris_unlabeled_structure():
+    result = lab.load_iris_unlabeled(feature_indices=(0, 1))
+
+    assert isinstance(result, dict)
+    assert "X" in result
+    assert "feature_names" in result
+
+    X = result["X"]
+    feature_names = result["feature_names"]
 
     assert isinstance(X, np.ndarray)
-    assert isinstance(y, np.ndarray)
-    assert X.shape == (50, 1)
-    assert y.shape == (50,)
+    assert X.shape == (150, 2)
+    assert isinstance(feature_names, list)
+    assert len(feature_names) == 2
+    assert "sepal length" in feature_names[0].lower()
+    assert "sepal width" in feature_names[1].lower()
 
 
-def test_generate_nonlinear_data_reproducibility():
-    X1, y1 = lab.generate_nonlinear_data(
-        n_samples=30,
-        noise=0.2,
-        random_state=10
-    )
+def test_load_iris_unlabeled_no_labels():
+    result = lab.load_iris_unlabeled(feature_indices=(0, 1))
 
-    X2, y2 = lab.generate_nonlinear_data(
-        n_samples=30,
-        noise=0.2,
-        random_state=10
-    )
-
-    assert np.allclose(X1, X2)
-    assert np.allclose(y1, y2)
+    assert "y" not in result
+    assert "target" not in result
+    assert "labels" not in result
 
 
-def test_create_polynomial_model_predicts():
-    X = np.array([[0.0], [0.5], [1.0]])
-    y = np.array([0.0, 1.0, 0.0])
+def test_standardize_features_mean_std():
+    X = np.array([
+        [1.0, 2.0],
+        [3.0, 4.0],
+        [5.0, 6.0]
+    ])
 
-    model = lab.create_polynomial_model(degree=2)
-    model.fit(X, y)
+    result = lab.standardize_features(X)
 
-    preds = model.predict(X)
+    assert isinstance(result, dict)
+    assert "X_scaled" in result
+    assert "mean" in result
+    assert "std" in result
 
-    assert len(preds) == len(y)
+    X_scaled = result["X_scaled"]
+
+    assert np.allclose(np.mean(X_scaled, axis=0), np.array([0.0, 0.0]))
+    assert np.allclose(np.std(X_scaled, axis=0), np.array([1.0, 1.0]))
 
 
-def test_evaluate_polynomial_degrees_structure():
-    X, y = lab.generate_nonlinear_data(
-        n_samples=80,
-        noise=0.1,
-        random_state=0
-    )
+def test_standardize_features_zero_std():
+    X = np.array([
+        [1.0, 5.0],
+        [1.0, 6.0],
+        [1.0, 7.0]
+    ])
 
-    degrees = [1, 3, 5]
+    result = lab.standardize_features(X)
 
-    results = lab.evaluate_polynomial_degrees(
-        X,
-        y,
-        degrees,
-        test_size=0.25,
-        random_state=0
-    )
+    X_scaled = result["X_scaled"]
+    std = result["std"]
 
-    assert isinstance(results, dict)
+    assert std[0] == 1.0
+    assert np.all(np.isfinite(X_scaled))
+
+
+def test_fit_kmeans_structure():
+    X = np.array([
+        [0.0, 0.0],
+        [0.1, 0.0],
+        [5.0, 5.0],
+        [5.1, 5.0],
+        [10.0, 10.0],
+        [10.1, 10.0]
+    ])
+
+    result = lab.fit_kmeans(X, K=3, random_state=0, n_init=10)
+
+    assert isinstance(result, dict)
 
     required_keys = {
-        "degrees",
-        "train_errors",
-        "dev_errors",
-        "best_degree"
+        "centroids",
+        "labels",
+        "objective",
+        "n_iter"
     }
 
-    assert required_keys.issubset(results.keys())
-    assert results["degrees"] == degrees
-    assert len(results["train_errors"]) == len(degrees)
-    assert len(results["dev_errors"]) == len(degrees)
+    assert required_keys.issubset(result.keys())
 
-    for err in results["train_errors"]:
-        assert err >= 0
-
-    for err in results["dev_errors"]:
-        assert err >= 0
-
-    assert results["best_degree"] in degrees
+    assert result["centroids"].shape == (3, 2)
+    assert len(result["labels"]) == len(X)
+    assert result["objective"] >= 0
+    assert result["n_iter"] > 0
 
 
-def test_diagnose_from_errors_high_bias():
-    result = lab.diagnose_from_errors(
-        train_error=0.25,
-        dev_error=0.27,
-        high_error_threshold=0.15,
-        gap_threshold=0.05
-    )
+def test_compute_kmeans_objective_simple():
+    X = np.array([
+        [0.0, 0.0],
+        [2.0, 0.0],
+        [10.0, 0.0]
+    ])
 
-    assert isinstance(result, dict)
-    assert abs(result["generalization_gap"] - 0.02) < 1e-6
-    assert result["diagnosis"] == "high_bias"
+    centroids = np.array([
+        [1.0, 0.0],
+        [10.0, 0.0]
+    ])
 
+    labels = np.array([0, 0, 1])
 
-def test_diagnose_from_errors_high_variance():
-    result = lab.diagnose_from_errors(
-        train_error=0.05,
-        dev_error=0.16,
-        high_error_threshold=0.15,
-        gap_threshold=0.05
-    )
+    objective = lab.compute_kmeans_objective(X, centroids, labels)
 
-    assert isinstance(result, dict)
-    assert abs(result["generalization_gap"] - 0.11) < 1e-6
-    assert result["diagnosis"] == "high_variance"
-
-
-def test_diagnose_from_errors_high_bias_and_high_variance():
-    result = lab.diagnose_from_errors(
-        train_error=0.25,
-        dev_error=0.35,
-        high_error_threshold=0.15,
-        gap_threshold=0.05
-    )
-
-    assert isinstance(result, dict)
-    assert abs(result["generalization_gap"] - 0.10) < 1e-6
-    assert result["diagnosis"] == "high_bias_and_high_variance"
-
-
-def test_diagnose_from_errors_good_fit():
-    result = lab.diagnose_from_errors(
-        train_error=0.08,
-        dev_error=0.10,
-        high_error_threshold=0.15,
-        gap_threshold=0.05
-    )
-
-    assert isinstance(result, dict)
-    assert abs(result["generalization_gap"] - 0.02) < 1e-6
-    assert result["diagnosis"] == "good_fit"
+    assert abs(objective - 2.0) < 1e-6
 
 
 # ============================================================
 # Question 2 Tests
 # ============================================================
 
-def test_regularization_comparison_structure():
-    X, y = lab.generate_nonlinear_data(
-        n_samples=80,
-        noise=0.1,
-        random_state=5
-    )
+def test_evaluate_k_values_structure():
+    X = np.array([
+        [0.0, 0.0],
+        [0.1, 0.0],
+        [5.0, 5.0],
+        [5.1, 5.0],
+        [10.0, 10.0],
+        [10.1, 10.0]
+    ])
 
-    X_train = X[:60]
-    y_train = y[:60]
-    X_dev = X[60:]
-    y_dev = y[60:]
+    k_values = [1, 2, 3]
 
-    alphas = [0.0, 0.1, 1.0]
-
-    result = lab.regularization_comparison(
-        X_train,
-        y_train,
-        X_dev,
-        y_dev,
-        alphas
-    )
+    result = lab.evaluate_k_values(X, k_values, random_state=0, n_init=10)
 
     assert isinstance(result, dict)
 
     required_keys = {
-        "alphas",
-        "train_errors",
-        "dev_errors",
-        "best_alpha"
+        "k_values",
+        "objectives",
+        "relative_improvements"
     }
 
     assert required_keys.issubset(result.keys())
 
-    assert result["alphas"] == alphas
-    assert len(result["train_errors"]) == len(alphas)
-    assert len(result["dev_errors"]) == len(alphas)
-    assert result["best_alpha"] in alphas
+    assert result["k_values"] == k_values
+    assert len(result["objectives"]) == len(k_values)
+    assert len(result["relative_improvements"]) == len(k_values)
 
-    for err in result["train_errors"]:
-        assert err >= 0
+    assert result["relative_improvements"][0] == 0.0
 
-    for err in result["dev_errors"]:
-        assert err >= 0
+    for obj in result["objectives"]:
+        assert obj >= 0
 
 
-def test_recommend_action():
-    assert lab.recommend_action("high_bias") == "increase_model_complexity"
-    assert lab.recommend_action("high_variance") == "add_regularization_or_more_data"
-    assert lab.recommend_action("high_bias_and_high_variance") == "increase_complexity_then_regularize"
-    assert lab.recommend_action("good_fit") == "keep_model_or_minor_tuning"
-    assert lab.recommend_action("other") == "unknown_diagnosis"
+def test_evaluate_k_values_objective_decreases():
+    X = np.array([
+        [0.0, 0.0],
+        [0.1, 0.0],
+        [5.0, 5.0],
+        [5.1, 5.0],
+        [10.0, 10.0],
+        [10.1, 10.0]
+    ])
+
+    result = lab.evaluate_k_values(X, [1, 2, 3], random_state=0, n_init=10)
+
+    objectives = result["objectives"]
+
+    assert objectives[0] >= objectives[1]
+    assert objectives[1] >= objectives[2]
+
+
+def test_choose_elbow_k():
+    k_values = [1, 2, 3, 4, 5]
+    objectives = [100.0, 60.0, 30.0, 28.0, 27.0]
+
+    best_k = lab.choose_elbow_k(k_values, objectives)
+
+    assert best_k == 3
+
+
+def test_cluster_size_summary():
+    labels = np.array([0, 0, 1, 1, 1, 2])
+    K = 3
+
+    result = lab.cluster_size_summary(labels, K)
+
+    assert isinstance(result, dict)
+    assert result[0] == 2
+    assert result[1] == 3
+    assert result[2] == 1
+
+
+def test_identify_outliers_by_distance():
+    X = np.array([
+        [0.0, 0.0],
+        [0.1, 0.0],
+        [5.0, 5.0],
+        [20.0, 20.0]
+    ])
+
+    centroids = np.array([
+        [0.0, 0.0],
+        [5.0, 5.0]
+    ])
+
+    labels = np.array([0, 0, 1, 1])
+
+    result = lab.identify_outliers_by_distance(
+        X,
+        centroids,
+        labels,
+        top_n=2
+    )
+
+    assert isinstance(result, dict)
+    assert "indices" in result
+    assert "distances" in result
+
+    assert len(result["indices"]) == 2
+    assert len(result["distances"]) == 2
+
+    assert result["indices"][0] == 3
+    assert result["distances"][0] >= result["distances"][1]
+
+
+def test_diagnose_clustering_fit():
+    assert lab.diagnose_clustering_fit(K=2, elbow_k=4) == "underfitting"
+    assert lab.diagnose_clustering_fit(K=4, elbow_k=4) == "good_fit"
+    assert lab.diagnose_clustering_fit(K=8, elbow_k=4) == "overfitting"
+
+
+# ============================================================
+# Question 3 Tests: Visualization
+# ============================================================
+
+def test_plot_unlabeled_data_returns_fig_ax():
+    X = np.array([
+        [1.0, 2.0],
+        [2.0, 3.0],
+        [3.0, 4.0]
+    ])
+
+    fig, ax = lab.plot_unlabeled_data(
+        X,
+        feature_names=["Feature 1", "Feature 2"],
+        title="Test Plot"
+    )
+
+    assert fig is not None
+    assert ax is not None
+    assert ax.get_title() == "Test Plot"
+    assert ax.get_xlabel() == "Feature 1"
+    assert ax.get_ylabel() == "Feature 2"
+
+
+def test_plot_kmeans_clusters_returns_fig_ax():
+    X = np.array([
+        [0.0, 0.0],
+        [0.1, 0.0],
+        [5.0, 5.0],
+        [5.1, 5.0]
+    ])
+
+    labels = np.array([0, 0, 1, 1])
+
+    centroids = np.array([
+        [0.05, 0.0],
+        [5.05, 5.0]
+    ])
+
+    fig, ax = lab.plot_kmeans_clusters(
+        X,
+        labels,
+        centroids,
+        feature_names=["x1", "x2"],
+        title="Cluster Plot"
+    )
+
+    assert fig is not None
+    assert ax is not None
+    assert ax.get_title() == "Cluster Plot"
+    assert ax.get_xlabel() == "x1"
+    assert ax.get_ylabel() == "x2"
+
+
+def test_plot_elbow_curve_returns_fig_ax():
+    k_values = [1, 2, 3, 4]
+    objectives = [100.0, 60.0, 30.0, 28.0]
+
+    fig, ax = lab.plot_elbow_curve(
+        k_values,
+        objectives,
+        title="Elbow Test"
+    )
+
+    assert fig is not None
+    assert ax is not None
+    assert ax.get_title() == "Elbow Test"
+    assert ax.get_xlabel() == "Number of clusters K"
+    assert ax.get_ylabel() == "Objective value"
