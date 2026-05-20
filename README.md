@@ -1,28 +1,24 @@
-# AI Stats Lab: Bias-Variance Tradeoff
+# AI Lab: Unsupervised Learning and K-Means Clustering
+
 
 ## Topic
 
-This lab focuses on the **bias-variance tradeoff** in machine learning.
+This lab focuses on **unsupervised learning** and **K-Means clustering**.
 
 You will work with:
 
-- Nonlinear data generation
-- Polynomial regression
-- Model complexity
-- Train/dev error comparison
-- Bias and variance diagnosis
-- Regularization comparison
-- Model improvement recommendations
+- Unlabeled data
+- Iris dataset without labels
+- Feature standardization
+- K-Means clustering
+- K-Means objective function
+- Elbow method for choosing K
+- Underfitting and overfitting in clustering
+- Distance-based outlier detection
 
-The main idea is that model complexity affects generalization.
+In unsupervised learning, we observe input data only. There are no target labels. The goal is to discover structure in the data, such as clusters, unusual points, or lower-dimensional patterns.
 
-A very simple model may **underfit** and have **high bias**.
-
-A very complex model may **overfit** and have **high variance**.
-
-A good model balances bias and variance.
-
-This lab is connected to model iteration: instead of randomly trying model changes, we use train/dev error to decide whether to increase model complexity, add regularization, collect more data, or keep the model.
+The attached slides introduce this idea using the Iris dataset without labels, then explain K-Means as an unsupervised algorithm with centroids, assignment steps, update steps, and an objective function based on distances to centroids.
 
 ---
 
